@@ -100,7 +100,8 @@
       <label for="imp-url">Indirizzo app web (Apps Script)</label>
       <input id="imp-url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
       <label for="imp-token">Chiave</label>
-      <input id="imp-token" type="password" autocomplete="off">
+      <!-- Campo di testo mascherato, non "password": così il telefono non lo scambia per un accesso da salvare -->
+      <input id="imp-token" type="text" class="mascherato" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore>
       <div class="azioni">
         <button id="btn-prova" class="secondario">Prova</button>
         <button id="btn-salva-imp" class="primario">Salva</button>

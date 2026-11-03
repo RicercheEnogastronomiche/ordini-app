@@ -73,6 +73,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 input:disabled { opacity: .6; }
+.mascherato { -webkit-text-security: disc; text-security: disc; }
 .griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .griglia .pieno { grid-column: 1 / -1; }
 .info { font-size: 14px; color: var(--muted); margin-top: 6px; }
