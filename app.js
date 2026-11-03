@@ -154,12 +154,22 @@ const pct = (v) => (v * 100).toLocaleString('it-IT', { maximumFractionDigits: 2 
 
 // ---------------------------------------------------------------- disegno vista "Nuovo"
 
+const CONSEGNA_PRONTA = 'Pronta Consegna';
+
+function mostraConsegna() {
+  const testo = S.ordine.consegna || CONSEGNA_PRONTA;
+  $('#consegna').value = testo;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(testo);
+  $('#consegna-data').value = m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+  $('#consegna-pronta').hidden = !m;
+}
+
 function disegnaOrdine() {
   const o = S.ordine;
   $('#cliente-input').value = o.cliente;
   $('#azienda-input').value = o.azienda;
   $('#data').value = o.data;
-  $('#consegna').value = o.consegna;
+  mostraConsegna();
   $('#note').value = o.note;
   $('#sconto-extra').value = o.scontoExtra;
   $('#bozza-azienda').checked = !!o.bozze.azienda;
@@ -745,7 +755,14 @@ async function avvio() {
 
   $('#pagamento').addEventListener('change', (e) => { S.ordine.pagamento = e.target.value; aggiornaTotali(); salvaBozza(); });
   $('#data').addEventListener('change', (e) => { S.ordine.data = e.target.value || oggiIso(); salvaBozza(); });
-  $('#consegna').addEventListener('input', (e) => { S.ordine.consegna = e.target.value; salvaBozza(); });
+  // Consegna: "Pronta Consegna" oppure una data scelta dal calendario (scritta come gg/mm/aaaa)
+  $('#consegna-data').addEventListener('click', (e) => { try { e.target.showPicker(); } catch (err) { /* il telefono apre da solo */ } });
+  $('#consegna-data').addEventListener('change', (e) => {
+    const v = e.target.value;
+    S.ordine.consegna = v ? v.split('-').reverse().join('/') : CONSEGNA_PRONTA;
+    mostraConsegna(); salvaBozza();
+  });
+  $('#consegna-pronta').addEventListener('click', () => { S.ordine.consegna = CONSEGNA_PRONTA; mostraConsegna(); salvaBozza(); });
   $('#note').addEventListener('input', (e) => { S.ordine.note = e.target.value; salvaBozza(); });
   $('#sconto-extra').addEventListener('input', (e) => { S.ordine.scontoExtra = e.target.value; aggiornaTotali(); salvaBozza(); });
   $('#bozza-azienda').addEventListener('change', (e) => { S.ordine.bozze.azienda = e.target.checked; salvaBozza(); });

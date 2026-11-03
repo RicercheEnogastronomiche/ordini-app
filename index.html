@@ -46,7 +46,16 @@
     <div class="card griglia">
       <div><label for="pagamento">Pagamento</label><select id="pagamento"></select></div>
       <div><label for="data">Data</label><input type="date" id="data"></div>
-      <div class="pieno"><label for="consegna">Consegna</label><input id="consegna"></div>
+      <div class="pieno">
+        <label for="consegna-data">Consegna</label>
+        <div class="consegna-box">
+          <div class="consegna-campo">
+            <input id="consegna" readonly tabindex="-1" aria-hidden="true">
+            <input type="date" id="consegna-data" title="Scegli la data di consegna richiesta">
+          </div>
+          <button type="button" id="consegna-pronta" class="secondario" hidden>Pronta</button>
+        </div>
+      </div>
       <div class="pieno"><label for="note">Note</label><textarea id="note" rows="2"></textarea></div>
     </div>
 
