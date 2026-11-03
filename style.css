@@ -80,6 +80,7 @@ input:disabled { opacity: .6; }
 .info b { color: var(--text); }
 .nota { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); font-size: 13px; white-space: pre-line; }
 
+.modifica { background: var(--accent-soft); color: var(--accent); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
 .cerca { position: relative; }
 .suggerimenti {
   position: absolute; left: 0; right: 0; top: 100%; z-index: 10; margin: 2px 0 0; padding: 0; list-style: none;
@@ -132,6 +133,7 @@ input:disabled { opacity: .6; }
 .barra-tot { flex: 1; min-width: 0; }
 .barra-tot small { display: block; color: var(--muted); font-size: 12px; }
 .barra-tot strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.barra .primario, .barra .secondario { padding: 0 12px; }
 .primario, .secondario { min-height: 46px; padding: 0 16px; border-radius: 10px; font-weight: 700; border: 0; }
 .primario { background: var(--accent); color: var(--accent-text); }
 .secondario { background: var(--card); border: 1px solid var(--line); }
@@ -148,6 +150,7 @@ button:disabled { opacity: .5; }
 .ordini .azioni a, .ordini .azioni button { min-height: 40px; padding: 0 12px; display: inline-flex; align-items: center; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; }
 .ordini .azioni a { background: var(--accent-soft); color: var(--accent); }
 .stato { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; align-self: flex-start; }
+.stato.bozza { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
 .stato.attesa { background: var(--warn-soft); color: var(--warn); }
 .stato.invio { background: var(--accent-soft); color: var(--accent); }
 .stato.inviato { background: var(--ok-soft); color: var(--ok); }

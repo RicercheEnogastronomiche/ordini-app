@@ -24,6 +24,7 @@
 
 <main>
   <section id="vista-nuovo" class="vista">
+    <div id="in-modifica" class="modifica" hidden>Stai modificando un ordine salvato: premi <b>Salva</b> per aggiornarlo o <b>Invia</b> quando è pronto.</div>
     <div class="card">
       <label for="cliente-input">Cliente</label>
       <div class="cerca">
@@ -72,14 +73,15 @@
 
     <div class="barra">
       <div class="barra-tot"><small>Totale</small><strong id="barra-totale">€ 0,00</strong></div>
-      <button id="btn-svuota" class="secondario">Svuota</button>
-      <button id="btn-salva" class="primario">Salva ordine</button>
+      <button id="btn-svuota" class="secondario">Nuovo</button>
+      <button id="btn-salva" class="secondario">Salva</button>
+      <button id="btn-invia" class="primario">Invia</button>
     </div>
   </section>
 
   <section id="vista-coda" class="vista" hidden>
     <div class="azioni">
-      <button id="btn-sync" class="primario">Invia ora</button>
+      <button id="btn-sync" class="secondario">Riprova invii</button>
     </div>
     <ul id="lista-ordini" class="ordini"></ul>
   </section>

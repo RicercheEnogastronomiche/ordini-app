@@ -164,6 +164,7 @@ function disegnaOrdine() {
   $('#sconto-extra').value = o.scontoExtra;
   $('#bozza-azienda').checked = !!o.bozze.azienda;
   $('#bozza-cliente').checked = !!o.bozze.cliente;
+  $('#in-modifica').hidden = !o.salvato;
   disegnaPagamenti();
   disegnaInfoCliente();
   disegnaInfoAzienda();
@@ -389,15 +390,10 @@ function modificaRiga(e) {
 
 // ---------------------------------------------------------------- salvataggio e coda
 
-async function salvaOrdine() {
-  const o = S.ordine;
+function preparaPayload(o) {
   const righe = o.righe.filter((r) => r.qta > 0);
-  if (!o.cliente) return avviso('Manca il cliente', true);
-  if (!trovaAzienda(o.azienda)) return avviso("Manca l'azienda", true);
-  if (!righe.length) return avviso('Nessun articolo con quantità', true);
-
   const t = calcolaTotali({ ...o, righe });
-  const payload = {
+  return {
     id: o.id,
     data: o.data,
     cliente: o.cliente,
@@ -413,15 +409,88 @@ async function salvaOrdine() {
     }),
     totali: { somma: t.somma, spedizione: t.spedizione, portoTipo: t.portoTipo, scontoPagamento: t.scontoPag, totale: t.totale },
   };
+}
 
-  await DB.salvaOrdine({ id: o.id, creato: Date.now(), stato: 'attesa', payload });
+function erroreInvio(p) {
+  if (!p.cliente) return 'Manca il cliente';
+  if (!trovaAzienda(p.azienda)) return "Manca l'azienda";
+  if (!p.righe.length) return 'Nessun articolo con quantità';
+  return '';
+}
+
+const confermaInvio = (p) => confirm(`Invio l'ordine di ${p.cliente} (${fmtEuro(p.totali.totale)})?\nDopo l'invio non si potrà più modificare.`);
+
+const trovaRecord = async (id) => (await DB.ordini()).find((x) => x.id === id);
+
+// Salva l'ordine sul telefono come bozza; con invia=true lo mette in coda per il server
+async function salvaOrdine(invia) {
+  const o = S.ordine;
+  const payload = preparaPayload(o);
+  if (invia) {
+    const errore = erroreInvio(payload);
+    if (errore) return avviso(errore, true);
+    if (!confermaInvio(payload)) return;
+  } else if (!o.cliente && !o.azienda && !o.righe.length) {
+    return avviso("L'ordine è vuoto", true);
+  }
+
+  const vecchio = await trovaRecord(o.id);
+  if (vecchio && (vecchio.stato === 'invio' || vecchio.stato === 'inviato')) {
+    return avviso('Questo ordine è già stato inviato e non si può più modificare', true);
+  }
+  const { salvato, ...modulo } = o;
+  await DB.salvaOrdine({ id: o.id, creato: vecchio?.creato || Date.now(), stato: invia ? 'attesa' : 'bozza', payload, ordine: modulo });
   S.ordine = nuovoOrdine();
   await DB.set('bozza', S.ordine);
   disegnaOrdine();
   window.scrollTo(0, 0);
   mostraVista('coda');
-  avviso(navigator.onLine ? 'Ordine salvato, invio in corso…' : 'Ordine salvato: partirà appena torna la rete');
+  if (invia) {
+    avviso(navigator.onLine ? 'Invio in corso…' : 'Partirà appena torna la rete');
+    sincronizza();
+  } else {
+    avviso('Salvato. Lo trovi in Ordini, da modificare o inviare');
+  }
+}
+
+async function modificaSalvato(id) {
+  const rec = await trovaRecord(id);
+  if (!rec || !rec.ordine || rec.stato === 'invio' || rec.stato === 'inviato') return avviso('Questo ordine non si può più modificare', true);
+  const corrente = S.ordine;
+  if (corrente.id !== id && !corrente.salvato && corrente.righe.length &&
+      !confirm("L'ordine che stai scrivendo non è salvato e verrà perso. Procedo?")) return;
+  if (rec.stato !== 'bozza') {
+    // Tolto dalla coda finché non lo reinvii
+    rec.stato = 'bozza';
+    rec.errore = '';
+    await DB.salvaOrdine(rec);
+  }
+  S.ordine = { ...structuredClone(rec.ordine), salvato: true };
+  await DB.set('bozza', S.ordine);
+  disegnaOrdine();
+  mostraVista('nuovo');
+  window.scrollTo(0, 0);
+}
+
+async function inviaSalvato(id) {
+  const rec = await trovaRecord(id);
+  if (!rec || rec.stato !== 'bozza') return;
+  const errore = erroreInvio(rec.payload);
+  if (errore) return avviso(errore + ': premi Modifica per completarlo', true);
+  if (!confermaInvio(rec.payload)) return;
+  rec.stato = 'attesa';
+  await DB.salvaOrdine(rec);
+  await chiudiSeAperto(id);
+  if (!navigator.onLine) avviso('Partirà appena torna la rete');
   sincronizza();
+}
+
+// Se l'ordine è aperto in "Nuovo", lo sostituisce con uno vuoto
+async function chiudiSeAperto(id) {
+  if (S.ordine.id !== id) return;
+  S.ordine = nuovoOrdine();
+  await DB.set('bozza', S.ordine);
+  disegnaOrdine();
 }
 
 async function sincronizza(anche_errori = false) {
@@ -454,7 +523,7 @@ async function sincronizza(anche_errori = false) {
   }
 }
 
-const ETICHETTE_STATO = { attesa: 'In attesa', invio: 'Invio…', inviato: 'Inviato', errore: 'Errore' };
+const ETICHETTE_STATO = { bozza: 'Da inviare', attesa: 'In attesa', invio: 'Invio…', inviato: 'Inviato', errore: 'Errore' };
 
 async function disegnaCoda() {
   const ordini = (await DB.ordini()).sort((a, b) => b.creato - a.creato);
@@ -477,6 +546,9 @@ async function disegnaCoda() {
     }
     const azioni = [];
     if (e.pdf) azioni.push(`<a href="${esc(e.pdf)}" target="_blank" rel="noopener">Apri PDF</a>`);
+    const modificabile = o.ordine && o.stato !== 'invio' && o.stato !== 'inviato';
+    if (o.stato === 'bozza') azioni.push(`<button class="primario" data-invia="${esc(o.id)}">Invia</button>`);
+    if (modificabile) azioni.push(`<button class="secondario" data-modifica="${esc(o.id)}">Modifica</button>`);
     if (o.stato === 'errore') azioni.push(`<button class="secondario" data-riprova="${esc(o.id)}">Riprova</button>`);
     if (o.stato !== 'invio') azioni.push(`<button class="secondario" data-elimina="${esc(o.id)}">Elimina</button>`);
     return `<li>
@@ -489,9 +561,12 @@ async function disegnaCoda() {
 }
 
 async function gestisciCoda(e) {
-  const riprova = e.target.dataset.riprova;
-  const elimina = e.target.dataset.elimina;
-  if (riprova) {
+  const { riprova, elimina, invia, modifica } = e.target.dataset;
+  if (invia) {
+    inviaSalvato(invia);
+  } else if (modifica) {
+    modificaSalvato(modifica);
+  } else if (riprova) {
     sincronizza(true);
   } else if (elimina) {
     const o = (await DB.ordini()).find((x) => x.id === elimina);
@@ -500,6 +575,7 @@ async function gestisciCoda(e) {
       : 'Questo ordine non è ancora stato inviato: eliminandolo si perde. Procedo?';
     if (!confirm(avvisoTesto)) return;
     await DB.eliminaOrdine(elimina);
+    await chiudiSeAperto(elimina);
     disegnaCoda();
   }
 }
@@ -621,9 +697,13 @@ async function avvio() {
   $('#righe').addEventListener('input', modificaRiga);
   $('#righe').addEventListener('focusin', (e) => { if (e.target.matches('input')) e.target.select(); });
 
-  $('#btn-salva').addEventListener('click', salvaOrdine);
+  $('#btn-salva').addEventListener('click', () => salvaOrdine(false));
+  $('#btn-invia').addEventListener('click', () => salvaOrdine(true));
   $('#btn-svuota').addEventListener('click', async () => {
-    if (S.ordine.righe.length && !confirm("Svuoto l'ordine in corso?")) return;
+    const domanda = S.ordine.salvato
+      ? 'Chiudo questo ordine? Le modifiche non salvate si perdono (la versione salvata resta in Ordini).'
+      : "Svuoto l'ordine in corso?";
+    if ((S.ordine.salvato || S.ordine.righe.length) && !confirm(domanda)) return;
     S.ordine = nuovoOrdine();
     await DB.set('bozza', S.ordine);
     disegnaOrdine();
