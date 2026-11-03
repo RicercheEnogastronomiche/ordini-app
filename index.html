@@ -60,7 +60,10 @@
     </div>
 
     <div class="card">
-      <label for="prodotto-input">Articoli</label>
+      <div class="articoli-testa">
+        <label for="prodotto-input">Articoli</label>
+        <button type="button" id="btn-ripeti" class="secondario" hidden>↻ Ripeti ultimo ordine</button>
+      </div>
       <input id="prodotto-input" type="search" autocomplete="off" placeholder="Scegli prima l'azienda" disabled>
       <ul id="prodotto-lista" class="risultati"></ul>
       <div id="righe"></div>

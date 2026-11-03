@@ -189,7 +189,12 @@ function disegnaPagamenti() {
   sel.value = S.ordine.pagamento;
 }
 
+function mostraRipeti() {
+  $('#btn-ripeti').hidden = !(S.ordine.cliente && trovaAzienda(S.ordine.azienda));
+}
+
 function disegnaInfoCliente() {
+  mostraRipeti();
   const el = $('#cliente-info');
   const nome = S.ordine.cliente;
   if (!nome) { el.innerHTML = ''; return; }
@@ -201,6 +206,7 @@ function disegnaInfoCliente() {
 }
 
 function disegnaInfoAzienda() {
+  mostraRipeti();
   const el = $('#azienda-info');
   const az = trovaAzienda(S.ordine.azienda);
   const inp = $('#prodotto-input');
@@ -364,6 +370,82 @@ function aggiungiProdotto(p) {
   disegnaRighe();
   salvaBozza();
   avviso(esistente ? `${p[1]}: quantità ${fmtNum(esistente.qta)}` : `Aggiunto: ${p[1]}`);
+}
+
+// ---------------------------------------------------------------- ripeti ultimo ordine
+
+const isoDaIt = (s) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || ''); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; };
+const stessoNome = (a, b) => norm(a).trim() === norm(b).trim();
+
+// Ultimo ordine di questo cliente con questa azienda salvato sul telefono (anche bozze)
+async function ultimoLocale(cliente, azienda) {
+  const trovati = (await ordiniVisibili()).filter((r) => r.payload && r.id !== S.ordine.id &&
+    stessoNome(r.payload.cliente, cliente) && stessoNome(r.payload.azienda, azienda) && r.payload.righe.length);
+  trovati.sort((a, b) => (b.payload.data || '').localeCompare(a.payload.data || '') || b.creato - a.creato);
+  const r = trovati[0];
+  return r ? { id: r.id, data: r.payload.data, righe: r.payload.righe } : null;
+}
+
+// Rifà le righe con i prezzi del listino attuale; tiene il prezzo vecchio solo se l'articolo non c'è più
+function righeDaRipetere(vecchie) {
+  const lis = listino();
+  let fuori = 0;
+  const righe = vecchie.map((v) => {
+    const p = lis.find((x) => v.cod && String(x[0]) === v.cod && x[1] === v.nome)
+      || (v.cod && lis.find((x) => String(x[0]) === v.cod))
+      || lis.find((x) => x[1] === v.nome);
+    if (!p) fuori++;
+    const imballo = p ? (p[3] || 0) : (v.imballo || 0);
+    let unita = v.unita, qta = v.qta;
+    if (!unita) {
+      // Dal foglio arrivano pezzi e cartoni: cartoni se sono interi, altrimenti pezzi
+      const ct = Math.round(v.ct * 1000) / 1000;
+      if (imballo && ct > 0 && Number.isInteger(ct)) { unita = 'ct'; qta = ct; } else { unita = 'pz'; qta = v.pz; }
+    }
+    if (unita === 'ct' && !imballo) { unita = 'pz'; qta = v.pz || qta; }
+    return {
+      cod: p ? p[0] : v.cod, nome: p ? p[1] : v.nome,
+      prezzo: p && p[2] !== null ? p[2] : (v.prezzo || 0),
+      imballo, qta, unita,
+    };
+  }).filter((r) => r.qta > 0);
+  return { righe, fuori };
+}
+
+async function ripetiUltimo() {
+  const o = S.ordine;
+  if (!o.cliente || !trovaAzienda(o.azienda)) return avviso("Scegli prima cliente e azienda", true);
+  const btn = $('#btn-ripeti');
+  btn.disabled = true;
+  try {
+    let ultimo = await ultimoLocale(o.cliente, o.azienda);
+    if (navigator.onLine && S.imp.url) {
+      try {
+        const { ordine } = await api('ultimo', { cliente: o.cliente, azienda: o.azienda });
+        if (ordine && ordine.id !== o.id && ordine.righe.length) {
+          const remoto = { ...ordine, data: isoDaIt(ordine.data) };
+          if (!ultimo || remoto.data > ultimo.data) ultimo = remoto;
+        }
+      } catch (err) {
+        if (!ultimo) throw err;
+      }
+    }
+    if (!ultimo) return avviso(`Nessun ordine precedente di ${o.cliente} con ${o.azienda}`, true);
+
+    const { righe, fuori } = righeDaRipetere(ultimo.righe);
+    if (!righe.length) return avviso("L'ultimo ordine non ha articoli da ripetere", true);
+    if (o.righe.length && !confirm(`Sostituisco i ${o.righe.length} articoli già inseriti con i ${righe.length} dell'ordine del ${fmtData(ultimo.data)}?`)) return;
+    o.righe = righe;
+    disegnaRighe();
+    salvaBozza();
+    let msg = `Caricati ${righe.length} articoli dall'ordine del ${fmtData(ultimo.data)}, con i prezzi di listino attuali`;
+    if (fuori) msg += `. ${fuori} non più in listino: tenuto il prezzo vecchio`;
+    avviso(msg);
+  } catch (err) {
+    avviso(err.rete ? "Senza rete trovo solo gli ordini salvati su questo telefono" : 'Ultimo ordine non trovato: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function gestisciRighe(e) {
@@ -769,6 +851,7 @@ async function avvio() {
   $('#bozza-cliente').addEventListener('change', (e) => { S.ordine.bozze.cliente = e.target.checked; salvaBozza(); });
 
   $('#prodotto-input').addEventListener('input', cercaProdotti);
+  $('#btn-ripeti').addEventListener('click', ripetiUltimo);
   $('#prodotto-lista').addEventListener('click', (e) => {
     const li = e.target.closest('li[data-i]');
     if (li) aggiungiProdotto($('#prodotto-lista')._trovati[li.dataset.i]);

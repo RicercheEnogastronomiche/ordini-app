@@ -97,6 +97,9 @@ input:disabled { opacity: .6; }
 .risultati { border: 1px solid var(--line); }
 .risultati li.vuoto { color: var(--muted); cursor: default; }
 
+.articoli-testa { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.articoli-testa label { margin: 0; }
+#btn-ripeti { min-height: 40px; padding: 0 12px; font-size: 14px; }
 .riga { border-top: 1px solid var(--line); padding: 10px 0; }
 #righe .riga:first-child { margin-top: 8px; }
 .riga-top { display: flex; gap: 8px; align-items: flex-start; }
