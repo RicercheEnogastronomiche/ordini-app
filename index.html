@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5f4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Ordini Leone Iiriti</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>Ordini</h1>
+  <span id="stato-rete" class="pill"></span>
+</header>
+<nav class="tabs">
+  <button data-vista="nuovo" class="attivo">Nuovo</button>
+  <button data-vista="coda">Ordini <span id="badge-coda" class="badge" hidden></span></button>
+  <button data-vista="impostazioni">Impostazioni</button>
+</nav>
+
+<main>
+  <section id="vista-nuovo" class="vista">
+    <div class="card">
+      <label for="cliente-input">Cliente</label>
+      <div class="cerca">
+        <input id="cliente-input" autocomplete="off" placeholder="Cerca cliente…">
+        <ul id="cliente-lista" class="suggerimenti" hidden></ul>
+      </div>
+      <div id="cliente-info" class="info"></div>
+    </div>
+
+    <div class="card">
+      <label for="azienda-input">Azienda</label>
+      <div class="cerca">
+        <input id="azienda-input" autocomplete="off" placeholder="Cerca azienda…">
+        <ul id="azienda-lista" class="suggerimenti" hidden></ul>
+      </div>
+      <div id="azienda-info" class="info"></div>
+    </div>
+
+    <div class="card griglia">
+      <div><label for="pagamento">Pagamento</label><select id="pagamento"></select></div>
+      <div><label for="data">Data</label><input type="date" id="data"></div>
+      <div class="pieno"><label for="consegna">Consegna</label><input id="consegna"></div>
+      <div class="pieno"><label for="note">Note</label><textarea id="note" rows="2"></textarea></div>
+    </div>
+
+    <div class="card">
+      <label for="prodotto-input">Articoli</label>
+      <input id="prodotto-input" type="search" autocomplete="off" placeholder="Scegli prima l'azienda" disabled>
+      <ul id="prodotto-lista" class="risultati"></ul>
+      <div id="righe"></div>
+    </div>
+
+    <div class="card">
+      <div id="totali" class="totali"></div>
+      <div class="sconto-extra">
+        <label for="sconto-extra">Sconto extra %</label>
+        <input id="sconto-extra" inputmode="decimal" placeholder="0">
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="etichetta">Bozze email da preparare</span>
+      <label class="check"><input type="checkbox" id="bozza-azienda"> All'azienda</label>
+      <label class="check"><input type="checkbox" id="bozza-cliente"> Al cliente</label>
+    </div>
+
+    <div class="barra">
+      <div class="barra-tot"><small>Totale</small><strong id="barra-totale">€ 0,00</strong></div>
+      <button id="btn-svuota" class="secondario">Svuota</button>
+      <button id="btn-salva" class="primario">Salva ordine</button>
+    </div>
+  </section>
+
+  <section id="vista-coda" class="vista" hidden>
+    <div class="azioni">
+      <button id="btn-sync" class="primario">Invia ora</button>
+    </div>
+    <ul id="lista-ordini" class="ordini"></ul>
+  </section>
+
+  <section id="vista-impostazioni" class="vista" hidden>
+    <div class="card">
+      <label for="imp-url">Indirizzo app web (Apps Script)</label>
+      <input id="imp-url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
+      <label for="imp-token">Chiave</label>
+      <input id="imp-token" type="password" autocomplete="off">
+      <div class="azioni">
+        <button id="btn-prova" class="secondario">Prova</button>
+        <button id="btn-salva-imp" class="primario">Salva</button>
+      </div>
+    </div>
+    <div class="card">
+      <span class="etichetta">Dati sul telefono</span>
+      <div id="info-dati" class="info"></div>
+      <div class="azioni">
+        <button id="btn-aggiorna" class="primario">Aggiorna clienti e listini</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="avviso" class="avviso" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
