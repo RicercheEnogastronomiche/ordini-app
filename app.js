@@ -420,7 +420,16 @@ function erroreInvio(p) {
 
 const confermaInvio = (p) => confirm(`Invio l'ordine di ${p.cliente} (${fmtEuro(p.totali.totale)})?\nDopo l'invio non si potrà più modificare.`);
 
-const trovaRecord = async (id) => (await DB.ordini()).find((x) => x.id === id);
+// Gli ordini eliminati restano come segnaposto finché il foglio non lo sa
+const ordiniVisibili = async () => (await DB.ordini()).filter((o) => !o.eliminato);
+const trovaRecord = async (id) => (await ordiniVisibili()).find((x) => x.id === id);
+
+// Ogni modifica a un ordine salvato va poi copiata sul foglio (sporco = da copiare)
+async function segna(rec) {
+  rec.aggiornato = Date.now();
+  rec.sporco = true;
+  await DB.salvaOrdine(rec);
+}
 
 // Salva l'ordine sul telefono come bozza; con invia=true lo mette in coda per il server
 async function salvaOrdine(invia) {
@@ -439,7 +448,7 @@ async function salvaOrdine(invia) {
     return avviso('Questo ordine è già stato inviato e non si può più modificare', true);
   }
   const { salvato, ...modulo } = o;
-  await DB.salvaOrdine({ id: o.id, creato: vecchio?.creato || Date.now(), stato: invia ? 'attesa' : 'bozza', payload, ordine: modulo });
+  await segna({ id: o.id, creato: vecchio?.creato || Date.now(), stato: invia ? 'attesa' : 'bozza', payload, ordine: modulo });
   S.ordine = nuovoOrdine();
   await DB.set('bozza', S.ordine);
   disegnaOrdine();
@@ -447,10 +456,10 @@ async function salvaOrdine(invia) {
   mostraVista('coda');
   if (invia) {
     avviso(navigator.onLine ? 'Invio in corso…' : 'Partirà appena torna la rete');
-    sincronizza();
   } else {
     avviso('Salvato. Lo trovi in Ordini, da modificare o inviare');
   }
+  sincronizza();
 }
 
 async function modificaSalvato(id) {
@@ -463,7 +472,7 @@ async function modificaSalvato(id) {
     // Tolto dalla coda finché non lo reinvii
     rec.stato = 'bozza';
     rec.errore = '';
-    await DB.salvaOrdine(rec);
+    await segna(rec);
   }
   S.ordine = { ...structuredClone(rec.ordine), salvato: true };
   await DB.set('bozza', S.ordine);
@@ -479,7 +488,7 @@ async function inviaSalvato(id) {
   if (errore) return avviso(errore + ': premi Modifica per completarlo', true);
   if (!confermaInvio(rec.payload)) return;
   rec.stato = 'attesa';
-  await DB.salvaOrdine(rec);
+  await segna(rec);
   await chiudiSeAperto(id);
   if (!navigator.onLine) avviso('Partirà appena torna la rete');
   sincronizza();
@@ -494,10 +503,13 @@ async function chiudiSeAperto(id) {
 }
 
 async function sincronizza(anche_errori = false) {
-  if (S.sincronizzando || !navigator.onLine || !S.imp.url) { await disegnaCoda(); return; }
+  // Se un giro è già in corso ne serve un altro subito dopo, per le modifiche appena fatte
+  if (S.sincronizzando) { S.ripeti = true; await disegnaCoda(); return; }
+  if (!navigator.onLine || !S.imp.url) { await disegnaCoda(); return; }
   S.sincronizzando = true;
+  S.ripeti = false;
   try {
-    const lista = (await DB.ordini())
+    const lista = (await ordiniVisibili())
       .filter((o) => o.stato === 'attesa' || (anche_errori && o.stato === 'errore'))
       .sort((a, b) => a.creato - b.creato);
     for (const o of lista) {
@@ -511,22 +523,61 @@ async function sincronizza(anche_errori = false) {
       } catch (err) {
         o.stato = err.rete ? 'attesa' : 'errore';
         o.errore = err.message;
-        await DB.salvaOrdine(o);
-        if (err.rete) break;
+        if (err.rete) { await DB.salvaOrdine(o); return; }
+        await segna(o);
         continue;
       }
-      await DB.salvaOrdine(o);
+      await segna(o);
     }
+    await allinea();
+  } catch (err) {
+    if (!err.rete) console.warn('Allineamento ordini non riuscito:', err.message);
   } finally {
     S.sincronizzando = false;
     await disegnaCoda();
+    if (S.ripeti) sincronizza();
+  }
+}
+
+// Copia sul foglio gli ordini cambiati qui, poi prende quelli cambiati sugli altri dispositivi.
+// Vince la modifica più recente; il foglio non riporta mai indietro un ordine inviato.
+async function allinea() {
+  for (const rec of (await DB.ordini()).filter((r) => r.sporco && r.stato !== 'invio')) {
+    const { sporco, erroreFoglio, ...daSalvare } = rec;
+    try {
+      const { record } = await api('salva', { record: daSalvare });
+      await applicaDalFoglio(record, rec.aggiornato);
+    } catch (err) {
+      if (err.rete) throw err;
+      rec.erroreFoglio = 'Non copiato sul foglio: ' + err.message;
+      await DB.salvaOrdine(rec);
+    }
+  }
+  const { ordini } = await api('salvati');
+  const locali = new Map((await DB.ordini()).map((r) => [r.id, r]));
+  for (const rec of ordini) {
+    const loc = locali.get(rec.id);
+    if (loc && (loc.sporco || loc.stato === 'invio' || (loc.aggiornato || 0) >= rec.aggiornato)) continue;
+    await applicaDalFoglio(rec);
+  }
+}
+
+async function applicaDalFoglio(rec, inviato) {
+  const attuale = (await DB.ordini()).find((r) => r.id === rec.id);
+  // Cambiato di nuovo qui mentre era in viaggio: resta da copiare
+  if (attuale && inviato && attuale.aggiornato > inviato) return;
+  if (rec.eliminato) {
+    await DB.eliminaOrdine(rec.id);
+    await chiudiSeAperto(rec.id);
+  } else {
+    await DB.salvaOrdine(rec);
   }
 }
 
 const ETICHETTE_STATO = { bozza: 'Da inviare', attesa: 'In attesa', invio: 'Invio…', inviato: 'Inviato', errore: 'Errore' };
 
 async function disegnaCoda() {
-  const ordini = (await DB.ordini()).sort((a, b) => b.creato - a.creato);
+  const ordini = (await ordiniVisibili()).sort((a, b) => b.creato - a.creato);
   const daInviare = ordini.filter((o) => o.stato !== 'inviato').length;
   const badge = $('#badge-coda');
   badge.hidden = !daInviare;
@@ -544,6 +595,7 @@ async function disegnaCoda() {
     } else if (o.errore) {
       msg = o.errore;
     }
+    if (o.erroreFoglio) msg = [msg, o.erroreFoglio].filter(Boolean).join('\n');
     const azioni = [];
     if (e.pdf) azioni.push(`<a href="${esc(e.pdf)}" target="_blank" rel="noopener">Apri PDF</a>`);
     const modificabile = o.ordine && o.stato !== 'invio' && o.stato !== 'inviato';
@@ -569,14 +621,15 @@ async function gestisciCoda(e) {
   } else if (riprova) {
     sincronizza(true);
   } else if (elimina) {
-    const o = (await DB.ordini()).find((x) => x.id === elimina);
-    const avvisoTesto = o && o.stato === 'inviato'
-      ? "Tolgo l'ordine solo da questo telefono (resta nel foglio e su Drive). Procedo?"
-      : 'Questo ordine non è ancora stato inviato: eliminandolo si perde. Procedo?';
+    const o = await trovaRecord(elimina);
+    if (!o) return;
+    const avvisoTesto = o.stato === 'inviato'
+      ? "Tolgo l'ordine dall'elenco dell'app su tutti i dispositivi (resta nel foglio e su Drive). Procedo?"
+      : 'Questo ordine non è ancora stato inviato: eliminandolo si perde, anche sugli altri dispositivi. Procedo?';
     if (!confirm(avvisoTesto)) return;
-    await DB.eliminaOrdine(elimina);
+    await segna({ id: elimina, creato: o.creato, eliminato: true });
     await chiudiSeAperto(elimina);
-    disegnaCoda();
+    sincronizza();
   }
 }
 
@@ -618,6 +671,16 @@ async function apiDemo(azione, extra) {
   await new Promise((r) => setTimeout(r, 600));
   if (azione === 'dati') return (await fetch('demo.json')).json();
   if (azione === 'ordine') return { id: extra.ordine.id, foglio: `${extra.ordine.cliente} (prova)`, pdf: '', bozze: ['Modalità prova: nessuna bozza creata'] };
+  // Il "foglio" della prova è il localStorage del browser
+  const foglio = JSON.parse(localStorage.getItem('demo-foglio') || '{}');
+  if (azione === 'salvati') return { ordini: Object.values(foglio) };
+  if (azione === 'salva') {
+    const r = extra.record, v = foglio[r.id];
+    if (v && (r.aggiornato <= v.aggiornato || (v.stato === 'inviato' && !r.eliminato && r.stato !== 'inviato'))) return { record: v };
+    foglio[r.id] = r;
+    localStorage.setItem('demo-foglio', JSON.stringify(foglio));
+    return { record: r };
+  }
   return {};
 }
 
@@ -654,7 +717,7 @@ function disegnaInfoDati() {
 function mostraVista(nome) {
   document.querySelectorAll('.vista').forEach((v) => { v.hidden = v.id !== 'vista-' + nome; });
   document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('attivo', b.dataset.vista === nome));
-  if (nome === 'coda') disegnaCoda();
+  if (nome === 'coda') sincronizza();
 }
 
 // ---------------------------------------------------------------- avvio
@@ -736,6 +799,8 @@ async function avvio() {
   // Un ordine rimasto "Invio…" per chiusura dell'app torna in coda (il server non lo duplica)
   for (const o of await DB.ordini()) {
     if (o.stato === 'invio') { o.stato = 'attesa'; await DB.salvaOrdine(o); }
+    // Ordini di prima della sincronizzazione: da copiare sul foglio
+    if (!o.aggiornato) { o.aggiornato = o.creato; o.sporco = true; await DB.salvaOrdine(o); }
   }
 
   disegnaOrdine();
