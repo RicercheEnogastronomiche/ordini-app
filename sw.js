@@ -1,5 +1,5 @@
 // Tiene l'app disponibile senza rete. Cambiare VERSIONE a ogni aggiornamento dei file.
-const VERSIONE = 'ordini-v6';
+const VERSIONE = 'ordini-v7';
 const FILE = ['./', 'index.html', 'app.js', 'style.css', 'manifest.json', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {

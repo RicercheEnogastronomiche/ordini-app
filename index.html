@@ -19,14 +19,19 @@
 <nav class="tabs">
   <button data-vista="nuovo" class="attivo">Nuovo</button>
   <button data-vista="coda">Ordini <span id="badge-coda" class="badge" hidden></span></button>
-  <button data-vista="impostazioni">Impostazioni</button>
+  <button data-vista="clienti">Clienti</button>
+  <button data-vista="vendite">Vendite</button>
+  <button data-vista="impostazioni" aria-label="Impostazioni" title="Impostazioni">⚙</button>
 </nav>
 
 <main>
   <section id="vista-nuovo" class="vista">
     <div id="in-modifica" class="modifica" hidden>Stai modificando un ordine salvato: premi <b>Salva</b> per aggiornarlo o <b>Invia</b> quando è pronto.</div>
     <div class="card">
-      <label for="cliente-input">Cliente</label>
+      <div class="articoli-testa">
+        <label for="cliente-input">Cliente</label>
+        <button type="button" id="btn-nuovo-cliente" class="secondario">+ Nuovo cliente</button>
+      </div>
       <div class="cerca">
         <input id="cliente-input" autocomplete="off" placeholder="Cerca cliente…">
         <ul id="cliente-lista" class="suggerimenti" hidden></ul>
@@ -81,6 +86,7 @@
       <span class="etichetta">Bozze email da preparare</span>
       <label class="check"><input type="checkbox" id="bozza-azienda"> All'azienda</label>
       <label class="check"><input type="checkbox" id="bozza-cliente"> Al cliente</label>
+      <div id="avviso-email" class="info"></div>
     </div>
 
     <div class="barra">
@@ -92,10 +98,33 @@
   </section>
 
   <section id="vista-coda" class="vista" hidden>
-    <div class="azioni">
+    <div class="cerca-barra">
+      <input id="cerca-ordini" type="search" autocomplete="off" placeholder="Cerca per cliente, azienda o data…">
       <button id="btn-sync" class="secondario">Riprova invii</button>
     </div>
     <ul id="lista-ordini" class="ordini"></ul>
+  </section>
+
+  <section id="vista-clienti" class="vista" hidden>
+    <div class="card">
+      <input id="cerca-cliente" type="search" autocomplete="off" placeholder="Cerca cliente…">
+      <div id="storico-info" class="info"></div>
+    </div>
+    <div id="clienti-contenuto"></div>
+  </section>
+
+  <section id="vista-vendite" class="vista" hidden>
+    <div class="card">
+      <label for="periodo">Periodo</label>
+      <select id="periodo">
+        <option value="mese">Questo mese</option>
+        <option value="mese-1">Mese scorso</option>
+        <option value="anno">Quest'anno</option>
+        <option value="anno-1">Anno scorso</option>
+        <option value="12m">Ultimi 12 mesi</option>
+      </select>
+    </div>
+    <div id="vendite-contenuto"></div>
   </section>
 
   <section id="vista-impostazioni" class="vista" hidden>
@@ -119,6 +148,35 @@
     </div>
   </section>
 </main>
+
+<dialog id="dlg-cliente" class="dialogo">
+  <form method="dialog" id="form-cliente">
+    <h2>Nuovo cliente</h2>
+    <p class="info">Va nel file Ordini Dati (scheda "Clienti nuovi") e nella scheda ordine. Quando lo inserisci in Danea vale l'anagrafica di Danea.</p>
+    <label for="nc-nome">Ragione sociale *</label><input id="nc-nome" name="nome" required autocomplete="off">
+    <label for="nc-indirizzo">Indirizzo</label><input id="nc-indirizzo" name="indirizzo" autocomplete="off">
+    <div class="griglia3">
+      <div><label for="nc-cap">CAP</label><input id="nc-cap" name="cap" inputmode="numeric" autocomplete="off"></div>
+      <div><label for="nc-citta">Città</label><input id="nc-citta" name="citta" autocomplete="off"></div>
+      <div><label for="nc-prov">Prov</label><input id="nc-prov" name="prov" maxlength="2" autocomplete="off"></div>
+    </div>
+    <div class="griglia">
+      <div><label for="nc-piva">P.IVA</label><input id="nc-piva" name="piva" inputmode="numeric" autocomplete="off"></div>
+      <div><label for="nc-cf">Cod. fiscale</label><input id="nc-cf" name="cf" autocomplete="off"></div>
+      <div><label for="nc-sdi">SDI</label><input id="nc-sdi" name="sdi" autocomplete="off"></div>
+      <div><label for="nc-pec">PEC</label><input id="nc-pec" name="pec" type="email" autocomplete="off"></div>
+      <div><label for="nc-mail">Email</label><input id="nc-mail" name="mail" type="email" autocomplete="off"></div>
+      <div><label for="nc-tel">Telefono</label><input id="nc-tel" name="tel" type="tel" autocomplete="off"></div>
+      <div><label for="nc-referente">Referente</label><input id="nc-referente" name="referente" autocomplete="off"></div>
+      <div><label for="nc-cell">Cellulare</label><input id="nc-cell" name="cell" type="tel" autocomplete="off"></div>
+    </div>
+    <label for="nc-pagamento">Pagamento</label><select id="nc-pagamento" name="pagamento"></select>
+    <div class="azioni">
+      <button type="button" id="nc-annulla" class="secondario">Annulla</button>
+      <button type="submit" id="nc-salva" class="primario">Aggiungi</button>
+    </div>
+  </form>
+</dialog>
 
 <div id="avviso" class="avviso" hidden></div>
 <script src="app.js"></script>

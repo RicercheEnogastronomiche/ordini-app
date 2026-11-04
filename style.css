@@ -174,3 +174,69 @@ button:disabled { opacity: .5; }
   background: var(--text); color: var(--bg); font-size: 15px; box-shadow: 0 6px 20px rgba(0,0,0,.25);
 }
 .avviso.errore { background: var(--err); color: #fff; }
+
+/* ---- v7: note e sconti di riga, porto franco, clienti, vendite */
+.tabs button[data-vista="impostazioni"] { flex: 0 0 52px; font-size: 18px; }
+.tabs button { font-size: 15px; }
+#btn-nuovo-cliente { min-height: 36px; padding: 0 10px; font-size: 14px; }
+.matita { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 8px; width: 36px; height: 36px; font-size: 16px; }
+.matita.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.riga-nota { font-size: 14px; font-style: italic; color: var(--muted); margin-top: 4px; white-space: pre-line; }
+.tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 99px; margin: 3px 4px 0 0; font-style: normal; }
+.tag.sconto { background: var(--warn-soft); color: var(--warn); }
+.tag.omaggio { background: var(--ok-soft); color: var(--ok); }
+.tag.fissa { background: var(--accent-soft); color: var(--accent); }
+.tag.proporre { background: var(--warn-soft); color: var(--warn); }
+.tag.reso { background: var(--err-soft); color: var(--err); }
+.tag.nuovo { background: var(--accent-soft); color: var(--accent); }
+.riga-pannello { margin-top: 8px; padding: 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.riga-pannello textarea { background: var(--card); }
+.riga-pannello .check { font-size: 15px; }
+.sconto-riga { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sconto-riga button { min-height: 40px; padding: 0 12px; border: 1px solid var(--line); background: var(--card); border-radius: 8px; font-weight: 600; color: var(--muted); }
+.sconto-riga button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.sconto-riga input { width: 80px; min-height: 40px; text-align: right; background: var(--card); }
+.riga-pannello .azioni { margin-top: 8px; }
+.riga-pannello .azioni button { min-height: 40px; }
+.totali .mancante { display: block; margin-top: 4px; padding: 6px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 14px; }
+.totali .mancante.ok { background: var(--ok-soft); color: var(--ok); }
+#avviso-email .nota { display: block; }
+
+.cerca-barra { display: flex; gap: 8px; align-items: center; }
+.cerca-barra input { flex: 1; min-width: 0; }
+.cerca-barra button { flex: none; }
+
+.sezione { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 16px 4px 6px; }
+.elenco { list-style: none; margin: 0; padding: 0; }
+.elenco li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+.elenco li.tocca { cursor: pointer; }
+.elenco li.tocca:active { background: var(--accent-soft); }
+.elenco .testa { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.elenco .testa b { overflow-wrap: anywhere; }
+.elenco .det { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.elenco .azioni { justify-content: flex-start; flex-wrap: wrap; margin-top: 6px; }
+.elenco .azioni a, .elenco .azioni button { min-height: 38px; padding: 0 12px; display: inline-flex; align-items: center; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; }
+.elenco .azioni a { background: var(--accent-soft); color: var(--accent); }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.indietro { border: 0; background: none; color: var(--accent); font-weight: 700; padding: 6px 0; min-height: 40px; }
+.scheda-cliente h2 { font-size: 19px; margin: 0 0 4px; }
+.scheda-cliente .contatti a { color: var(--accent); font-weight: 600; text-decoration: none; margin-right: 12px; display: inline-block; padding: 4px 0; }
+.tabella { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabella th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.tabella td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tabella tr:last-child td { border-bottom: 0; }
+.tabella .num, .tabella th.num { text-align: right; }
+.tabella tfoot td { font-weight: 700; border-top: 2px solid var(--line); }
+details.gruppo { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; }
+details.gruppo summary { padding: 12px; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+details.gruppo summary small { color: var(--muted); font-weight: 400; }
+details.gruppo .prodotto { padding: 8px 12px; border-top: 1px solid var(--line); }
+details.gruppo .prodotto .det { font-size: 13px; color: var(--muted); }
+
+.dialogo { border: 0; border-radius: 14px; padding: 0; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 32px); background: var(--card); color: var(--text); }
+.dialogo::backdrop { background: rgba(0,0,0,.45); }
+.dialogo form { padding: 16px; }
+.dialogo h2 { margin: 0 0 4px; font-size: 19px; }
+.dialogo label { margin-top: 8px; }
+.dialogo .griglia { gap: 0 8px; }
+.griglia3 { display: grid; grid-template-columns: 90px 1fr 64px; gap: 0 8px; }
