@@ -416,6 +416,60 @@ function cercaProdotti() {
         return `<li data-i="${i}">${esc(p[1])}<small>${esc(det)}</small></li>`;
       }).join('')
     : '<li class="vuoto">Nessun prodotto con tutte queste parole</li>';
+  ul.innerHTML += `<li data-nuovo="1" class="nuovo-prodotto">➕ Nuovo prodotto «${esc(q.trim())}»<small>Crealo e aggiungilo all'ordine</small></li>`;
+}
+
+// ---------------------------------------------------------------- nuovo prodotto
+
+function apriNuovoProdotto() {
+  const az = S.ordine.azienda;
+  if (!trovaAzienda(az)) return avviso("Scegli prima l'azienda", true);
+  $('#form-prodotto').reset();
+  $('#np-nome').value = $('#prodotto-input').value.trim();
+  $('#np-listino-nome').textContent = az;
+  $('#np-listino').checked = true;
+  $('#dlg-prodotto').showModal();
+}
+
+async function salvaNuovoProdotto(e) {
+  e.preventDefault();
+  const az = S.ordine.azienda;
+  const nome = $('#np-nome').value.trim().replace(/\s+/g, ' ');
+  const cod = $('#np-cod').value.trim();
+  const prezzoTxt = $('#np-prezzo').value.trim();
+  const prezzo = prezzoTxt ? numIt(prezzoTxt) : null;
+  const imballo = numIt($('#np-imballo').value) || null;
+  if (!nome) return avviso('Scrivi il nome del prodotto', true);
+  const p = [cod, nome, prezzo, imballo];
+  if ($('#np-listino').checked) {
+    const lis = (S.dati.listini[az] = S.dati.listini[az] || []);
+    const i = lis.findIndex((x) => (cod && x[0] === cod) || stessoNome(x[1], nome));
+    if (i >= 0) lis[i] = p; else lis.push(p);
+    await DB.set('dati', S.dati);
+    await DB.set('prodottiNuovi', [...((await DB.get('prodottiNuovi')) || []), { azienda: az, prodotto: p }]);
+    inviaProdottiNuovi();
+    disegnaInfoAzienda();
+  }
+  $('#dlg-prodotto').close();
+  aggiungiProdotto(p);
+  if (prezzo === null) avviso(`Aggiunto: ${nome} — manca il prezzo, scrivilo nella riga`, true);
+}
+
+// Manda al file Listini i prodotti creati qui; senza rete restano in attesa
+async function inviaProdottiNuovi() {
+  if (!navigator.onLine || !S.imp.url) return;
+  const attesa = (await DB.get('prodottiNuovi')) || [];
+  if (!attesa.length) return;
+  const resto = [];
+  for (let i = 0; i < attesa.length; i++) {
+    try {
+      await api('prodotto', attesa[i]);
+    } catch (err) {
+      if (err.rete) { resto.push(...attesa.slice(i)); break; }
+      console.warn('Prodotto non salvato nel listino:', err.message);
+    }
+  }
+  await DB.set('prodottiNuovi', resto);
 }
 
 function aggiungiProdotto(p) {
@@ -779,6 +833,7 @@ async function sincronizza(anche_errori = false) {
     }
     await allinea();
     await inviaClientiNuovi();
+    await inviaProdottiNuovi();
   } catch (err) {
     if (!err.rete) console.warn('Allineamento ordini non riuscito:', err.message);
   } finally {
@@ -941,7 +996,7 @@ async function apiDemo(azione, extra) {
   await new Promise((r) => setTimeout(r, 600));
   if (azione === 'dati') return (await fetch('demo.json')).json();
   if (azione === 'storico') return storicoDemo();
-  if (azione === 'nota' || azione === 'cliente') return {};
+  if (azione === 'nota' || azione === 'cliente' || azione === 'prodotto') return {};
   if (azione === 'ordine') return { id: extra.ordine.id, foglio: `${extra.ordine.cliente} (prova)`, pdf: '', bozze: ['Modalità prova: nessuna bozza creata'] };
   // Il "foglio" della prova è il localStorage del browser
   const foglio = JSON.parse(localStorage.getItem('demo-foglio') || '{}');
@@ -991,9 +1046,15 @@ async function aggiornaDati(silenzioso = false) {
   btn.textContent = 'Scarico…';
   try {
     await inviaClientiNuovi();
+    await inviaProdottiNuovi();
     const dati = await api('dati');
     for (const c of (await DB.get('clientiNuovi')) || []) {
       if (!dati.clienti.some((x) => stessoNome(x.nome, c.nome))) dati.clienti.push(c);
+    }
+    // Prodotti creati qui e non ancora arrivati al file Listini
+    for (const { azienda, prodotto: p } of (await DB.get('prodottiNuovi')) || []) {
+      const lis = (dati.listini[azienda] = dati.listini[azienda] || []);
+      if (!lis.some((x) => (p[0] && x[0] === p[0]) || stessoNome(x[1], p[1]))) lis.push(p);
     }
     dati.clienti.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
     S.dati = dati;
@@ -1462,7 +1523,10 @@ async function avvio() {
   $('#prodotto-lista').addEventListener('click', (e) => {
     const li = e.target.closest('li[data-i]');
     if (li) aggiungiProdotto($('#prodotto-lista')._trovati[li.dataset.i]);
+    else if (e.target.closest('li[data-nuovo]')) apriNuovoProdotto();
   });
+  $('#form-prodotto').addEventListener('submit', salvaNuovoProdotto);
+  $('#np-annulla').addEventListener('click', () => $('#dlg-prodotto').close());
   $('#righe').addEventListener('click', gestisciRighe);
   $('#righe').addEventListener('input', modificaRiga);
   $('#righe').addEventListener('change', (e) => { if (e.target.type === 'checkbox') modificaRiga(e); });

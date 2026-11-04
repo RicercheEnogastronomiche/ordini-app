@@ -240,3 +240,4 @@ details.gruppo .prodotto .det { font-size: 13px; color: var(--muted); }
 .dialogo label { margin-top: 8px; }
 .dialogo .griglia { gap: 0 8px; }
 .griglia3 { display: grid; grid-template-columns: 90px 1fr 64px; gap: 0 8px; }
+.risultati li.nuovo-prodotto { color: var(--accent); font-weight: 600; }
