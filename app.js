@@ -109,6 +109,9 @@ function salvaBozza() {
 const trovaAzienda = (nome) => S.dati?.aziende.find((a) => a.nome === nome) || null;
 const trovaCliente = (nome) => S.dati?.clienti.find((c) => c.nome === nome) || null;
 const listino = () => (S.dati?.listini[S.ordine.azienda] || []);
+// Magazzino = Riccardo stesso: listino da Danea, a pezzi, ordine che diventa un file per Danea
+const alMagazzino = (nome = S.ordine.azienda) => !!trovaAzienda(nome)?.magazzino;
+const passo = (r) => (r.multiplo > 1 ? r.multiplo : 1);
 
 // ---------------------------------------------------------------- calcoli (stesse regole del foglio ordine)
 
@@ -190,6 +193,7 @@ function disegnaOrdine() {
 // Bozze richieste ma senza indirizzo: la bozza si crea lo stesso, senza destinatario
 function mancanzeEmail(o) {
   const out = [];
+  if (alMagazzino(o.azienda)) return out;
   const az = trovaAzienda(o.azienda);
   if (o.bozze?.azienda && az && !az.mail) out.push(`${o.azienda} non ha l'email: la bozza all'azienda sarà senza destinatario`);
   const c = trovaCliente(o.cliente);
@@ -233,11 +237,13 @@ function disegnaInfoAzienda() {
   const inp = $('#prodotto-input');
   if (!az) {
     el.innerHTML = '';
+    $('#card-bozze').hidden = false;
     inp.disabled = true;
     inp.placeholder = "Scegli prima l'azienda";
     return;
   }
   const n = listino().length;
+  $('#card-bozze').hidden = !!az.magazzino;
   inp.disabled = false;
   inp.placeholder = n ? `Cerca tra ${n} prodotti (es. tav 90)` : 'Listino vuoto o non trovato';
   const parti = [];
@@ -246,6 +252,12 @@ function disegnaInfoAzienda() {
   if (az.mail) parti.push(esc(az.mail));
   let html = parti.join(' · ');
   if (az.scontoMerce && typeof az.scontoMerce === 'string') html += `<br><span class="nota">Sconto merce: ${esc(az.scontoMerce)}</span>`;
+  if (az.magazzino) {
+    const quando = new Date(String(az.aggiornato || '').split(' ')[0]);
+    const fmt = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+    html = 'Articoli e giacenze da Danea' + (az.aggiornato && !isNaN(quando) ? `, aggiornati il ${quando.toLocaleString('it-IT', fmt)}` : '') +
+      '<br><span class="nota">L\'ordine diventa un file da importare in Danea: niente PDF né email</span>';
+  }
   el.innerHTML = html;
 }
 
@@ -260,7 +272,7 @@ function etichetteRiga(r) {
 function pannelloRiga(r) {
   const modo = r.scontoModo || '';
   return `<div class="riga-pannello">
-    <label>Nota sull'articolo (nel PDF e nella mail all'azienda)</label>
+    <label>Nota sull'articolo (${alMagazzino() ? "nella riga dell'ordine Danea" : "nel PDF e nella mail all'azienda"})</label>
     <textarea data-testo="nota" rows="2" placeholder="Es. confezione regalo, scadenza lunga…">${esc(r.nota || '')}</textarea>
     <label class="check"><input type="checkbox" data-check="fissa" ${r.fissa ? 'checked' : ''}> Fissa per ${esc(S.ordine.cliente || 'questo cliente')}: torna da sola nei prossimi ordini</label>
     <span class="etichetta">Sconto sulla riga</span>
@@ -278,7 +290,8 @@ function pannelloRiga(r) {
 function disegnaRighe() {
   const box = $('#righe');
   box.innerHTML = S.ordine.righe.map((r, i) => {
-    const sotto = [r.cod, r.imballo ? `${fmtNum(r.imballo)} pz/ct` : ''].filter(Boolean).join(' · ');
+    const sotto = [r.cod, r.imballo ? `${fmtNum(r.imballo)} pz/ct` : '', ...infoMagazzino(r)].filter(Boolean).join(' · ');
+    const mag = alMagazzino();
     const aperta = S.rigaAperta === i;
     const segni = !!(r.nota || r.scontoModo);
     return `<div class="riga" data-i="${i}">
@@ -294,10 +307,10 @@ function disegnaRighe() {
           <input data-campo="qta" inputmode="decimal" value="${fmtNum(r.qta)}" aria-label="Quantità">
           <button data-azione="piu" aria-label="Più">+</button>
         </div>
-        <div class="unita">
+        ${mag ? '<div class="unita"><button class="on" disabled>PZ</button></div>' : `<div class="unita">
           <button data-unita="ct" class="${r.unita === 'ct' ? 'on' : ''}">CT</button>
           <button data-unita="pz" class="${r.unita === 'pz' ? 'on' : ''}">PZ</button>
-        </div>
+        </div>`}
         <div class="prezzo-box">€ <input data-campo="prezzo" inputmode="decimal" value="${fmtNum(r.prezzo)}" aria-label="Prezzo unitario"></div>
         <span class="riga-tot"></span>
       </div>
@@ -305,6 +318,13 @@ function disegnaRighe() {
     </div>`;
   }).join('');
   aggiornaTotali();
+}
+
+// Dati Danea della riga: giacenza, prezzo d'acquisto, multiplo d'ordine
+function infoMagazzino(r) {
+  if (r.giacenza === undefined) return [];
+  const g = r.giacenza > 0 ? `giac. ${fmtNum(r.giacenza)}` : 'giac. 0';
+  return [g, r.acquisto ? `acq. ${fmtEuro(r.acquisto)}` : '', r.multiplo > 1 ? `multiplo ${fmtNum(r.multiplo)}` : ''];
 }
 
 function aggiornaTotali() {
@@ -412,10 +432,12 @@ function cercaProdotti() {
   ul._trovati = trovati;
   ul.innerHTML = trovati.length
     ? trovati.map((p, i) => {
-        const det = [p[0], p[2] !== null ? fmtEuro(p[2]) : 'prezzo mancante', p[3] ? `${fmtNum(p[3])} pz/ct` : ''].filter(Boolean).join(' · ');
+        const det = [p[0], p[2] !== null ? fmtEuro(p[2]) : 'prezzo mancante', p[3] ? `${fmtNum(p[3])} pz/ct` : '',
+          ...(p.length > 4 ? infoMagazzino(datiMagazzino(p)) : [])].filter(Boolean).join(' · ');
         return `<li data-i="${i}">${esc(p[1])}<small>${esc(det)}</small></li>`;
       }).join('')
     : '<li class="vuoto">Nessun prodotto con tutte queste parole</li>';
+  if (alMagazzino()) return;   // gli articoli del Magazzino nascono in Danea
   ul.innerHTML += `<li data-nuovo="1" class="nuovo-prodotto">➕ Nuovo prodotto «${esc(q.trim())}»<small>Crealo e aggiungilo all'ordine</small></li>`;
 }
 
@@ -472,13 +494,19 @@ async function inviaProdottiNuovi() {
   await DB.set('prodottiNuovi', resto);
 }
 
+// Listino Magazzino: [cod, nome, prezzo, 0, giacenza, acquisto, multiplo]
+function datiMagazzino(p) {
+  return p && p.length > 4 ? { giacenza: p[4] || 0, acquisto: p[5] || 0, multiplo: p[6] || 1 } : {};
+}
+
 function aggiungiProdotto(p) {
   const o = S.ordine;
   const esistente = o.righe.find((r) => r.nome === p[1] && r.cod === p[0]);
   if (esistente) {
-    esistente.qta += 1;
+    esistente.qta += passo(esistente);
   } else {
-    const r = { cod: p[0], nome: p[1], prezzo: p[2] || 0, prezzoListino: p[2] || 0, imballo: p[3] || 0, qta: 1, unita: p[3] ? 'ct' : 'pz' };
+    const m = datiMagazzino(p);
+    const r = { cod: p[0], nome: p[1], prezzo: p[2] || 0, prezzoListino: p[2] || 0, imballo: p[3] || 0, qta: m.multiplo || 1, unita: p[3] ? 'ct' : 'pz', ...m };
     applicaNoteFisse([r]);
     o.righe.push(r);
   }
@@ -524,7 +552,7 @@ function righeDaRipetere(vecchie) {
     return {
       cod: p ? p[0] : v.cod, nome: p ? p[1] : v.nome,
       prezzo, prezzoListino: prezzo,
-      imballo, qta, unita,
+      imballo, qta, unita, ...datiMagazzino(p),
     };
   }).filter((r) => r.qta > 0);
   applicaNoteFisse(righe);
@@ -591,7 +619,7 @@ function gestisciRighe(e) {
     disegnaRighe();
     if (sconto === 'pct') document.querySelector(`#righe .riga[data-i="${el.dataset.i}"] [data-campo-sconto]`)?.focus();
   } else if (azione === 'piu' || azione === 'meno') {
-    r.qta = Math.max(0, r.qta + (azione === 'piu' ? 1 : -1));
+    r.qta = Math.max(0, r.qta + (azione === 'piu' ? passo(r) : -passo(r)));
     el.querySelector('[data-campo="qta"]').value = fmtNum(r.qta);
     aggiornaTotali();
   } else if (unita && unita !== r.unita) {
@@ -691,7 +719,7 @@ function preparaPayload(o) {
     consegna: o.consegna,
     note: o.note,
     scontoExtra: t.extra,
-    bozze: o.bozze,
+    bozze: alMagazzino(o.azienda) ? { azienda: false, cliente: false } : o.bozze,
     righe: righe.map((r) => {
       const c = calcolaRiga(r);
       const nota = String(r.nota || '').trim();
@@ -900,12 +928,13 @@ async function disegnaCoda() {
     const e = o.esito || {};
     let msg = '';
     if (o.stato === 'inviato') {
-      msg = [e.duplicato ? 'Era già registrato.' : `Scheda: ${e.foglio}`, ...(e.bozze || [])].join('\n');
+      msg = [e.duplicato ? 'Era già registrato.' : (e.xml !== undefined ? `Ordine ${e.foglio}` : `Scheda: ${e.foglio}`), ...(e.bozze || [])].join('\n');
     } else if (o.errore) {
       msg = o.errore;
     }
     if (o.erroreFoglio) msg = [msg, o.erroreFoglio].filter(Boolean).join('\n');
     const azioni = [];
+    if (e.xml) azioni.push(`<a href="${esc(e.xml)}" target="_blank" rel="noopener">File Danea</a>`);
     if (e.pdf) {
       azioni.push(`<a href="${esc(e.pdf)}" target="_blank" rel="noopener">Apri PDF</a>`);
       azioni.push(`<button class="secondario" data-condividi="${esc(o.id)}">Condividi</button>`);
@@ -997,6 +1026,9 @@ async function apiDemo(azione, extra) {
   if (azione === 'dati') return (await fetch('demo.json')).json();
   if (azione === 'storico') return storicoDemo();
   if (azione === 'nota' || azione === 'cliente' || azione === 'prodotto') return {};
+  if (azione === 'ordine' && extra.ordine.azienda === 'Magazzino') {
+    return { id: extra.ordine.id, foglio: 'Danea n. 0/APP (prova)', xml: '', bozze: ['Modalità prova: nessun file per Danea creato'] };
+  }
   if (azione === 'ordine') return { id: extra.ordine.id, foglio: `${extra.ordine.cliente} (prova)`, pdf: '', bozze: ['Modalità prova: nessuna bozza creata'] };
   // Il "foglio" della prova è il localStorage del browser
   const foglio = JSON.parse(localStorage.getItem('demo-foglio') || '{}');
