@@ -283,7 +283,7 @@ function pannelloRiga(r) {
       ${modo === 'pct' ? `<input data-campo-sconto inputmode="decimal" placeholder="%" value="${fmtNum(r.scontoPct || '')}" aria-label="Sconto percentuale">` : ''}
     </div>
     <div class="info">Prezzo di listino ${fmtEuro(r.prezzoListino ?? r.prezzo)}</div>
-    <div class="azioni"><button type="button" class="primario" data-azione="chiudi">Fatto</button></div>
+    <div class="azioni">${r.nuovo ? '<button type="button" class="secondario" data-azione="modifica-prodotto">Modifica prodotto</button>' : ''}<button type="button" class="primario" data-azione="chiudi">Fatto</button></div>
   </div>`;
 }
 
@@ -443,13 +443,25 @@ function cercaProdotti() {
 
 // ---------------------------------------------------------------- nuovo prodotto
 
-function apriNuovoProdotto() {
+// i = indice della riga: modifica di un prodotto creato qui; senza, prodotto nuovo
+function apriNuovoProdotto(i) {
   const az = S.ordine.azienda;
   if (!trovaAzienda(az)) return avviso("Scegli prima l'azienda", true);
+  const r = i >= 0 ? S.ordine.righe[i] : null;
+  S.modificaRiga = r ? i : -1;
   $('#form-prodotto').reset();
-  $('#np-nome').value = $('#prodotto-input').value.trim();
+  $('#np-titolo').textContent = r ? 'Modifica prodotto' : 'Nuovo prodotto';
+  $('#np-salva').textContent = r ? 'Salva modifiche' : "Aggiungi all'ordine";
+  $('#np-info').textContent = r
+    ? (r.nuovo.listino ? `Cambia la riga dell'ordine e il prodotto nel listino di ${az}.` : "Cambia la riga dell'ordine. Con la spunta lo salvi anche nel listino.")
+    : "Viene aggiunto all'ordine. Se lasci la spunta va anche nel listino dell'azienda (file Listini), così lo ritrovi la prossima volta.";
+  $('#np-nome').value = r ? r.nome : $('#prodotto-input').value.trim();
+  $('#np-cod').value = r ? r.cod || '' : '';
+  $('#np-prezzo').value = r ? fmtNum(r.prezzoListino ?? r.prezzo) : '';
+  $('#np-imballo').value = r && r.imballo ? fmtNum(r.imballo) : '';
   $('#np-listino-nome').textContent = az;
-  $('#np-listino').checked = true;
+  $('#np-listino').checked = !r;
+  $('#np-listino').closest('label').hidden = !!(r && r.nuovo.listino);
   $('#dlg-prodotto').showModal();
 }
 
@@ -463,17 +475,42 @@ async function salvaNuovoProdotto(e) {
   const imballo = numIt($('#np-imballo').value) || null;
   if (!nome) return avviso('Scrivi il nome del prodotto', true);
   const p = [cod, nome, prezzo, imballo];
-  if ($('#np-listino').checked) {
+  const r = S.modificaRiga >= 0 ? S.ordine.righe[S.modificaRiga] : null;
+  const vecchio = r ? [r.cod, r.nome] : null;
+  const giaInListino = !!(r && r.nuovo.listino);
+  const nelListino = giaInListino || $('#np-listino').checked;
+  if (nelListino) {
     const lis = (S.dati.listini[az] = S.dati.listini[az] || []);
-    const i = lis.findIndex((x) => (cod && x[0] === cod) || stessoNome(x[1], nome));
+    const uguale = (x, c, n) => (c && x[0] === c) || stessoNome(x[1], n);
+    let i = giaInListino ? lis.findIndex((x) => uguale(x, vecchio[0], vecchio[1])) : -1;
+    if (i < 0) i = lis.findIndex((x) => uguale(x, cod, nome));
     if (i >= 0) lis[i] = p; else lis.push(p);
     await DB.set('dati', S.dati);
-    await DB.set('prodottiNuovi', [...((await DB.get('prodottiNuovi')) || []), { azienda: az, prodotto: p }]);
+    const attesa = (await DB.get('prodottiNuovi')) || [];
+    // Se il prodotto non è ancora partito per il file Listini, cambio quello in attesa
+    const j = giaInListino ? attesa.findIndex((x) => x.azienda === az && x.prodotto[0] === vecchio[0] && x.prodotto[1] === vecchio[1]) : -1;
+    if (j >= 0) attesa[j] = { ...attesa[j], prodotto: p };
+    else attesa.push(giaInListino ? { azienda: az, prodotto: p, vecchio } : { azienda: az, prodotto: p });
+    await DB.set('prodottiNuovi', attesa);
     inviaProdottiNuovi();
     disegnaInfoAzienda();
   }
   $('#dlg-prodotto').close();
+  S.modificaRiga = -1;
+  if (r) {
+    Object.assign(r, { cod, nome, imballo: imballo || 0 });
+    if (prezzo !== null) r.prezzoListino = prezzo;
+    applicaSconto(r);
+    if (!r.imballo && r.unita === 'ct') r.unita = 'pz';
+    r.nuovo.listino = nelListino;
+    disegnaRighe();
+    salvaBozza();
+    avviso(`Modificato: ${nome}`);
+    return;
+  }
   aggiungiProdotto(p);
+  const riga = S.ordine.righe.find((x) => x.nome === p[1] && x.cod === p[0]);
+  if (riga) { riga.nuovo = { listino: nelListino }; salvaBozza(); }
   if (prezzo === null) avviso(`Aggiunto: ${nome} — manca il prezzo, scrivilo nella riga`, true);
 }
 
@@ -612,6 +649,9 @@ function gestisciRighe(e) {
     S.rigaAperta = (azione === 'dettagli' && S.rigaAperta !== i) ? i : -1;
     disegnaRighe();
     if (S.rigaAperta === i && !r.nota) document.querySelector(`#righe .riga[data-i="${i}"] textarea`)?.focus();
+  } else if (azione === 'modifica-prodotto') {
+    apriNuovoProdotto(Number(el.dataset.i));
+    return;
   } else if (sconto !== undefined) {
     if (r.prezzoListino === undefined) r.prezzoListino = r.prezzo;
     r.scontoModo = sconto;
@@ -1559,6 +1599,7 @@ async function avvio() {
   });
   $('#form-prodotto').addEventListener('submit', salvaNuovoProdotto);
   $('#np-annulla').addEventListener('click', () => $('#dlg-prodotto').close());
+  $('#dlg-prodotto').addEventListener('close', () => { S.modificaRiga = -1; });
   $('#righe').addEventListener('click', gestisciRighe);
   $('#righe').addEventListener('input', modificaRiga);
   $('#righe').addEventListener('change', (e) => { if (e.target.type === 'checkbox') modificaRiga(e); });

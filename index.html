@@ -180,8 +180,8 @@
 
 <dialog id="dlg-prodotto" class="dialogo">
   <form method="dialog" id="form-prodotto">
-    <h2>Nuovo prodotto</h2>
-    <p class="info">Viene aggiunto all'ordine. Se lasci la spunta va anche nel listino dell'azienda (file Listini), così lo ritrovi la prossima volta.</p>
+    <h2 id="np-titolo">Nuovo prodotto</h2>
+    <p class="info" id="np-info">Viene aggiunto all'ordine. Se lasci la spunta va anche nel listino dell'azienda (file Listini), così lo ritrovi la prossima volta.</p>
     <label for="np-nome">Nome *</label><input id="np-nome" required autocomplete="off">
     <div class="griglia">
       <div><label for="np-cod">Codice</label><input id="np-cod" autocomplete="off"></div>
@@ -191,7 +191,7 @@
     <label class="check"><input type="checkbox" id="np-listino" checked> Salva nel listino di&nbsp;<b id="np-listino-nome"></b></label>
     <div class="azioni">
       <button type="button" id="np-annulla" class="secondario">Annulla</button>
-      <button type="submit" class="primario">Aggiungi all'ordine</button>
+      <button type="submit" id="np-salva" class="primario">Aggiungi all'ordine</button>
     </div>
   </form>
 </dialog>
