@@ -112,6 +112,9 @@ const listino = () => (S.dati?.listini[S.ordine.azienda] || []);
 // Magazzino = Riccardo stesso: listino da Danea, a pezzi, ordine che diventa un file per Danea
 const alMagazzino = (nome = S.ordine.azienda) => !!trovaAzienda(nome)?.magazzino;
 const passo = (r) => (r.multiplo > 1 ? r.multiplo : 1);
+// Cartone di più misure ("6 o 15" nel listino): quinto valore [6, 15]
+const imballiAlt = (p) => (p && Array.isArray(p[4]) ? p[4] : null);
+const testoImballo = (r) => (r.imballi ? `cartone da ${fmtNum(r.imballo)} (${r.imballi.map(fmtNum).join(' o ')})` : `${fmtNum(r.imballo)} pz/ct`);
 
 // ---------------------------------------------------------------- calcoli (stesse regole del foglio ordine)
 
@@ -282,6 +285,8 @@ function pannelloRiga(r) {
       <button type="button" data-sconto="omaggio" class="${modo === 'omaggio' ? 'on' : ''}">Omaggio</button>
       ${modo === 'pct' ? `<input data-campo-sconto inputmode="decimal" placeholder="%" value="${fmtNum(r.scontoPct || '')}" aria-label="Sconto percentuale">` : ''}
     </div>
+    ${r.imballi && !alMagazzino() ? `<span class="etichetta">Cartone da</span>
+    <div class="sconto-riga">${r.imballi.map((n) => `<button type="button" data-imballo="${n}" class="${n === r.imballo ? 'on' : ''}">${fmtNum(n)} pz</button>`).join('')}</div>` : ''}
     <div class="info">Prezzo di listino ${fmtEuro(r.prezzoListino ?? r.prezzo)}</div>
     <div class="azioni">${r.nuovo ? '<button type="button" class="secondario" data-azione="modifica-prodotto">Modifica prodotto</button>' : ''}<button type="button" class="primario" data-azione="chiudi">Fatto</button></div>
   </div>`;
@@ -290,7 +295,7 @@ function pannelloRiga(r) {
 function disegnaRighe() {
   const box = $('#righe');
   box.innerHTML = S.ordine.righe.map((r, i) => {
-    const sotto = [r.cod, r.imballo ? `${fmtNum(r.imballo)} pz/ct` : '', ...infoMagazzino(r)].filter(Boolean).join(' · ');
+    const sotto = [r.cod, r.imballo ? testoImballo(r) : '', ...infoMagazzino(r)].filter(Boolean).join(' · ');
     const mag = alMagazzino();
     const aperta = S.rigaAperta === i;
     const segni = !!(r.nota || r.scontoModo);
@@ -432,8 +437,10 @@ function cercaProdotti() {
   ul._trovati = trovati;
   ul.innerHTML = trovati.length
     ? trovati.map((p, i) => {
-        const det = [p[0], p[2] !== null ? fmtEuro(p[2]) : 'prezzo mancante', p[3] ? `${fmtNum(p[3])} pz/ct` : '',
-          ...(p.length > 4 ? infoMagazzino(datiMagazzino(p)) : [])].filter(Boolean).join(' · ');
+        const alt = imballiAlt(p);
+        const det = [p[0], p[2] !== null ? fmtEuro(p[2]) : 'prezzo mancante',
+          alt ? `${alt.map(fmtNum).join(' o ')} pz/ct` : (p[3] ? `${fmtNum(p[3])} pz/ct` : ''),
+          ...infoMagazzino(datiMagazzino(p))].filter(Boolean).join(' · ');
         return `<li data-i="${i}">${esc(p[1])}<small>${esc(det)}</small></li>`;
       }).join('')
     : '<li class="vuoto">Nessun prodotto con tutte queste parole</li>';
@@ -499,6 +506,7 @@ async function salvaNuovoProdotto(e) {
   S.modificaRiga = -1;
   if (r) {
     Object.assign(r, { cod, nome, imballo: imballo || 0 });
+    if (r.imballi && !r.imballi.includes(r.imballo)) delete r.imballi;
     if (prezzo !== null) r.prezzoListino = prezzo;
     applicaSconto(r);
     if (!r.imballo && r.unita === 'ct') r.unita = 'pz';
@@ -533,7 +541,7 @@ async function inviaProdottiNuovi() {
 
 // Listino Magazzino: [cod, nome, prezzo, 0, giacenza, acquisto, multiplo]
 function datiMagazzino(p) {
-  return p && p.length > 4 ? { giacenza: p[4] || 0, acquisto: p[5] || 0, multiplo: p[6] || 1 } : {};
+  return p && p.length > 4 && !imballiAlt(p) ? { giacenza: p[4] || 0, acquisto: p[5] || 0, multiplo: p[6] || 1 } : {};
 }
 
 function aggiungiProdotto(p) {
@@ -544,6 +552,7 @@ function aggiungiProdotto(p) {
   } else {
     const m = datiMagazzino(p);
     const r = { cod: p[0], nome: p[1], prezzo: p[2] || 0, prezzoListino: p[2] || 0, imballo: p[3] || 0, qta: m.multiplo || 1, unita: p[3] ? 'ct' : 'pz', ...m };
+    if (imballiAlt(p)) r.imballi = imballiAlt(p);
     applicaNoteFisse([r]);
     o.righe.push(r);
   }
@@ -577,7 +586,9 @@ function righeDaRipetere(vecchie) {
       || (v.cod && lis.find((x) => String(x[0]) === v.cod))
       || lis.find((x) => x[1] === v.nome);
     if (!p) fuori++;
-    const imballo = p ? (p[3] || 0) : (v.imballo || 0);
+    const alt = imballiAlt(p);
+    // Cartone di più misure: tiene quella scelta l'ultima volta
+    const imballo = p ? (alt && alt.includes(v.imballo) ? v.imballo : (p[3] || 0)) : (v.imballo || 0);
     let unita = v.unita, qta = v.qta;
     if (!unita) {
       // Dal foglio arrivano pezzi e cartoni: cartoni se sono interi, altrimenti pezzi
@@ -589,7 +600,7 @@ function righeDaRipetere(vecchie) {
     return {
       cod: p ? p[0] : v.cod, nome: p ? p[1] : v.nome,
       prezzo, prezzoListino: prezzo,
-      imballo, qta, unita, ...datiMagazzino(p),
+      imballo, qta, unita, ...datiMagazzino(p), ...(alt ? { imballi: alt } : {}),
     };
   }).filter((r) => r.qta > 0);
   applicaNoteFisse(righe);
@@ -649,6 +660,9 @@ function gestisciRighe(e) {
     S.rigaAperta = (azione === 'dettagli' && S.rigaAperta !== i) ? i : -1;
     disegnaRighe();
     if (S.rigaAperta === i && !r.nota) document.querySelector(`#righe .riga[data-i="${i}"] textarea`)?.focus();
+  } else if (e.target.dataset.imballo) {
+    r.imballo = Number(e.target.dataset.imballo);
+    disegnaRighe();
   } else if (azione === 'modifica-prodotto') {
     apriNuovoProdotto(Number(el.dataset.i));
     return;
